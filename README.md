@@ -1,6 +1,4 @@
-# Secure Hybrid Data Center Architecture — Cyber Security Internship
-
-A practical cybersecurity project based on the Cisco Virtual Internship 2026 student problem statement.
+# Secure Hybrid Data Center Architecture 
 
 ## Objective
 
