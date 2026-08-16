@@ -1,0 +1,16 @@
+{
+  "model": "default-deny",
+  "allow": [
+    {"name":"internet-to-teaching-https","source":"internet","destination":"teaching","action":"read","port":443,"reason":"Public traffic is allowed only to the protected teaching application over HTTPS."},
+    {"name":"teaching-to-database","source":"teaching","destination":"database","action":"read","port":5432,"reason":"The teaching application is explicitly allowed to access its database."},
+    {"name":"research-to-database","source":"research","destination":"database","action":"read","port":5432,"reason":"Research has an explicit database dependency for this demo."},
+    {"name":"teaching-to-dns","source":"teaching","destination":"dns","action":"resolve","port":53,"reason":"DNS is required for normal service discovery."},
+    {"name":"research-to-dns","source":"research","destination":"dns","action":"resolve","port":53,"reason":"DNS is required for normal service discovery."}
+  ],
+  "deny": [
+    {"name":"namespace-isolation","source":"teaching","destination":"research","action":"read","reason":"Kubernetes-style namespace isolation blocks lateral movement."},
+    {"name":"namespace-isolation-reverse","source":"research","destination":"teaching","action":"read","reason":"Research cannot laterally access teaching workloads."},
+    {"name":"developer-no-security-admin","source":"developer","destination":"security-admin","action":"admin","reason":"Least-privilege IAM prevents developers from administering security controls."},
+    {"name":"internet-no-database","source":"internet","destination":"database","action":"*","reason":"Databases are private and never directly exposed to the internet."}
+  ]
+}
