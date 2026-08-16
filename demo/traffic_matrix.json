@@ -1,0 +1,11 @@
+{
+  "flows": [
+    {"source": "internet", "destination": "teaching", "action": "read", "port": 443, "expected": "ALLOW"},
+    {"source": "teaching", "destination": "database", "action": "read", "port": 5432, "expected": "ALLOW"},
+    {"source": "research", "destination": "database", "action": "read", "port": 5432, "expected": "ALLOW"},
+    {"source": "teaching", "destination": "research", "action": "read", "port": 443, "expected": "DENY"},
+    {"source": "research", "destination": "teaching", "action": "read", "port": 443, "expected": "DENY"},
+    {"source": "internet", "destination": "database", "action": "read", "port": 5432, "expected": "DENY"},
+    {"source": "developer", "destination": "security-admin", "action": "admin", "port": 443, "expected": "DENY"}
+  ]
+}
