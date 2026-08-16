@@ -1,109 +1,82 @@
-from fastapi import FastAPI, Request, HTTPException
+from datetime import datetime, timezone
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
-from datetime import datetime, timezone
-import json
+
+from .security import evaluate, load_policy
 
 BASE = Path(__file__).resolve().parent
-POLICY_FILE = BASE / "policy.json"
 
 app = FastAPI(
-    title="Hybrid Security Demo",
-    version="1.0.0",
-    description="Interactive demonstration of IAM + VPC + Kubernetes-style segmentation."
+    title="Secure Hybrid Data Center Security Platform",
+    version="2.0.0",
+    description="Interactive proof-of-concept for zero-trust policy enforcement and hybrid data-center segmentation.",
 )
-
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 
-def load_policy():
-    return json.loads(POLICY_FILE.read_text())
-
-
-def evaluate(source, destination, action, port=None):
-    policy = load_policy()
-
-    for rule in policy["allow"]:
-        if (
-            rule["source"] == source
-            and rule["destination"] == destination
-            and rule["action"] == action
-            and (rule.get("port") is None or rule.get("port") == port)
-        ):
-            return {"decision": "ALLOW", "reason": rule["reason"], "rule": rule["name"]}
-
-    for rule in policy["deny"]:
-        if (
-            (rule["source"] == source or rule["source"] == "*")
-            and (rule["destination"] == destination or rule["destination"] == "*")
-            and (rule["action"] == action or rule["action"] == "*")
-        ):
-            return {"decision": "DENY", "reason": rule["reason"], "rule": rule["name"]}
-
-    return {"decision": "DENY", "reason": "Default deny: no explicit allow rule exists.", "rule": "DEFAULT_DENY"}
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 @app.get("/", response_class=HTMLResponse)
-async def home():
-    return HTMLResponse((BASE / "static" / "index.html").read_text())
+async def home() -> HTMLResponse:
+    return HTMLResponse((BASE / "static" / "index.html").read_text(encoding="utf-8"))
 
 
 @app.get("/health")
-async def health():
-    return {"status": "healthy", "service": "hybrid-security-demo", "time": datetime.now(timezone.utc).isoformat()}
+async def health() -> dict:
+    return {"status": "healthy", "service": "hybrid-security-demo", "time": now()}
 
 
 @app.get("/api/policy")
-async def policy():
+async def policy() -> dict:
     return load_policy()
 
 
 @app.post("/api/check")
-async def check(request: Request):
+async def check(request: Request) -> dict:
     body = await request.json()
     required = ["source", "destination", "action"]
-    missing = [x for x in required if x not in body]
+    missing = [key for key in required if key not in body]
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing fields: {', '.join(missing)}")
-    result = evaluate(body["source"], body["destination"], body["action"], body.get("port"))
-    return {"timestamp": datetime.now(timezone.utc).isoformat(), "request": body, **result}
+    result = evaluate(body)
+    return {"timestamp": now(), "request": body, **result}
+
+
+def protected(source: str, destination: str, action: str, port: int, service: str):
+    result = evaluate({"source": source, "destination": destination, "action": action, "port": port})
+    if result["decision"] != "ALLOW":
+        return JSONResponse(status_code=403, content={"service": service, "status": "BLOCKED", **result})
+    return {"service": service, "status": "ACCESS_GRANTED", "message": f"{service.title()} access simulated successfully.", "policy": result}
 
 
 @app.get("/api/service/teaching")
 async def teaching(request: Request):
-    source = request.headers.get("X-Demo-Source", "unknown")
-    result = evaluate(source, "teaching", "read", 443)
-    if result["decision"] != "ALLOW":
-        return JSONResponse(status_code=403, content={"service": "teaching", "status": "BLOCKED", **result})
-    return {"service": "teaching", "status": "ACCESS_GRANTED", "message": "Teaching application data returned.", "policy": result}
+    return protected(request.headers.get("X-Demo-Source", "unknown"), "teaching", "read", 443, "teaching")
 
 
 @app.get("/api/service/research")
 async def research(request: Request):
-    source = request.headers.get("X-Demo-Source", "unknown")
-    result = evaluate(source, "research", "read", 443)
-    if result["decision"] != "ALLOW":
-        return JSONResponse(status_code=403, content={"service": "research", "status": "BLOCKED", **result})
-    return {"service": "research", "status": "ACCESS_GRANTED", "message": "Research application data returned.", "policy": result}
+    return protected(request.headers.get("X-Demo-Source", "unknown"), "research", "read", 443, "research")
 
 
 @app.get("/api/service/database")
 async def database(request: Request):
-    source = request.headers.get("X-Demo-Source", "unknown")
-    result = evaluate(source, "database", "read", 5432)
-    if result["decision"] != "ALLOW":
-        return JSONResponse(status_code=403, content={"service": "database", "status": "BLOCKED", **result})
-    return {"service": "database", "status": "ACCESS_GRANTED", "message": "Database query simulated successfully.", "policy": result}
+    return protected(request.headers.get("X-Demo-Source", "unknown"), "database", "read", 5432, "database")
 
 
 @app.get("/api/scenarios")
-async def scenarios():
+async def scenarios() -> list[dict]:
     return [
-        {"name": "Internet -> Teaching", "source": "internet", "destination": "teaching", "action": "read", "port": 443},
-        {"name": "Teaching -> Database", "source": "teaching", "destination": "database", "action": "read", "port": 5432},
-        {"name": "Teaching -> Research", "source": "teaching", "destination": "research", "action": "read", "port": 443},
-        {"name": "Research -> Teaching", "source": "research", "destination": "teaching", "action": "read", "port": 443},
-        {"name": "Developer -> Security Admin API", "source": "developer", "destination": "security-admin", "action": "admin", "port": 443},
-        {"name": "Workload -> DNS", "source": "teaching", "destination": "dns", "action": "resolve", "port": 53},
+        {"name": "Internet → Teaching", "source": "internet", "destination": "teaching", "action": "read", "port": 443, "expected": "ALLOW"},
+        {"name": "Teaching → Database", "source": "teaching", "destination": "database", "action": "read", "port": 5432, "expected": "ALLOW"},
+        {"name": "Teaching → Research", "source": "teaching", "destination": "research", "action": "read", "port": 443, "expected": "DENY"},
+        {"name": "Research → Teaching", "source": "research", "destination": "teaching", "action": "read", "port": 443, "expected": "DENY"},
+        {"name": "Internet → Database", "source": "internet", "destination": "database", "action": "read", "port": 5432, "expected": "DENY"},
+        {"name": "Developer → Security Admin", "source": "developer", "destination": "security-admin", "action": "admin", "port": 443, "expected": "DENY"},
+        {"name": "Teaching → DNS", "source": "teaching", "destination": "dns", "action": "resolve", "port": 53, "expected": "ALLOW"},
     ]
