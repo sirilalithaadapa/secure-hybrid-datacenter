@@ -1,0 +1,11 @@
+aws_region = "ap-south-1"
+
+# Keep paid services disabled for the first plan.
+enable_nat_gateway     = false
+enable_transit_gateway = false
+enable_eks             = false
+enable_flow_logs       = false
+
+# Only set these when using an existing CloudWatch Logs destination.
+flow_log_destination_arn = ""
+flow_log_iam_role_arn    = ""
