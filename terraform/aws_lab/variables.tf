@@ -40,8 +40,14 @@ variable "enable_transit_gateway" {
 
 variable "enable_eks" {
   type        = bool
-  description = "Creates an EKS control plane. Paid resource."
+  description = "Creates an EKS control plane and managed node group. Paid resources."
   default     = false
+}
+
+variable "eks_instance_type" {
+  type        = string
+  description = "Small EC2 instance type for the EKS lab node group."
+  default     = "t3.small"
 }
 
 variable "enable_flow_logs" {
