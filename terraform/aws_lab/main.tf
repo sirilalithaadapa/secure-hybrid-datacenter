@@ -28,8 +28,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-
-  tags = { Name = "${local.name}-vpc" }
+  tags                  = { Name = "${local.name}-vpc" }
 }
 
 resource "aws_internet_gateway" "this" {
@@ -44,11 +43,7 @@ resource "aws_subnet" "public" {
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = var.availability_zones[count.index]
   map_public_ip_on_launch = true
-
-  tags = {
-    Name = "${local.name}-public-${count.index + 1}"
-    Tier = "public"
-  }
+  tags = { Name = "${local.name}-public-${count.index + 1}", Tier = "public" }
 }
 
 resource "aws_subnet" "private" {
@@ -57,11 +52,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = var.availability_zones[count.index]
-
-  tags = {
-    Name = "${local.name}-private-${count.index + 1}"
-    Tier = "private"
-  }
+  tags = { Name = "${local.name}-private-${count.index + 1}", Tier = "private" }
 }
 
 resource "aws_route_table" "public" {
@@ -107,8 +98,7 @@ resource "aws_route_table_association" "private" {
 resource "aws_eip" "nat" {
   count  = var.enable_nat_gateway ? length(var.availability_zones) : 0
   domain = "vpc"
-
-  tags = { Name = "${local.name}-nat-eip-${count.index + 1}" }
+  tags   = { Name = "${local.name}-nat-eip-${count.index + 1}" }
 }
 
 resource "aws_nat_gateway" "this" {
@@ -116,9 +106,8 @@ resource "aws_nat_gateway" "this" {
 
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-
-  depends_on = [aws_internet_gateway.this]
-  tags       = { Name = "${local.name}-nat-${count.index + 1}" }
+  depends_on    = [aws_internet_gateway.this]
+  tags          = { Name = "${local.name}-nat-${count.index + 1}" }
 }
 
 resource "aws_ec2_transit_gateway" "this" {
@@ -127,8 +116,7 @@ resource "aws_ec2_transit_gateway" "this" {
   description                     = "Secure Hybrid Data Center lab TGW"
   default_route_table_association = "disable"
   default_route_table_propagation = "disable"
-
-  tags = { Name = "${local.name}-tgw" }
+  tags                            = { Name = "${local.name}-tgw" }
 }
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "main" {
@@ -137,14 +125,12 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "main" {
   transit_gateway_id = aws_ec2_transit_gateway.this[0].id
   vpc_id             = aws_vpc.main.id
   subnet_ids         = aws_subnet.private[*].id
-
-  tags = { Name = "${local.name}-tgw-attachment" }
+  tags               = { Name = "${local.name}-tgw-attachment" }
 }
 
 resource "aws_iam_role" "eks_cluster" {
   count = var.enable_eks ? 1 : 0
-
-  name = "${local.name}-eks-cluster-role"
+  name  = "${local.name}-eks-cluster-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -175,15 +161,15 @@ resource "aws_eks_cluster" "this" {
   }
 
   depends_on = [aws_iam_role_policy_attachment.eks_cluster]
-
-  tags = { Name = "${local.name}-eks" }
+  tags       = { Name = "${local.name}-eks" }
 }
 
 resource "aws_flow_log" "vpc" {
+  count = var.enable_flow_logs ? 1 : 0
+
   vpc_id          = aws_vpc.main.id
   traffic_type    = "ALL"
-  iam_role_arn    = var.flow_log_iam_role_arn != "" ? var.flow_log_iam_role_arn : null
+  iam_role_arn    = var.flow_log_iam_role_arn
   log_destination = var.flow_log_destination_arn
-
-  tags = { Name = "${local.name}-flow-log" }
+  tags            = { Name = "${local.name}-flow-log" }
 }
