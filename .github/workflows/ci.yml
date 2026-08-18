@@ -26,3 +26,19 @@ jobs:
         run: pytest -q
       - name: Compile Python
         run: python -m compileall app
+
+  terraform-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Terraform format check
+        working-directory: terraform/aws_lab
+        run: terraform fmt -check -recursive
+      - name: Terraform init
+        working-directory: terraform/aws_lab
+        run: terraform init -backend=false
+      - name: Terraform validate
+        working-directory: terraform/aws_lab
+        run: terraform validate
